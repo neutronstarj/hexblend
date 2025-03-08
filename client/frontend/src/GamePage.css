@@ -1,0 +1,18 @@
+.hex-shape {
+    width: 64px;
+    height: 64px;
+    clip-path: polygon(
+      25% 0%, 
+      75% 0%, 
+      100% 50%, 
+      75% 100%, 
+      25% 100%, 
+      0% 50%
+    );
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid black;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+  
