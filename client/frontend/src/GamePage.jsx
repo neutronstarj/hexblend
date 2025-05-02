@@ -1,10 +1,8 @@
-// GamePage.jsx
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import "./GamePage.css"; // CSS for .hex-shape if you want
 
-// For simplicity, define your color options here
 const colorOptions = [
   { name: "White", hex: "#FFFFFF" },
   { name: "Black", hex: "#000000" },
@@ -23,25 +21,41 @@ export default function GamePage() {
   const navigate = useNavigate();
   const location = useLocation();
   const params = new URLSearchParams(location.search);
+  console.log("🧪 Raw URL Params:", {
+    targetName: params.get("targetName"),
+    targetHex: params.get("targetHex")
+  });
+  
   const name = params.get("name");
 
   const [timeRemaining, setTimeRemaining] = useState(60);
   const [targetColor, setTargetColor] = useState({ name: "Loading...", hex: "#FFFFFF" });
-  const [userColors, setUserColors] = useState([]); // array of hex codes chosen by player
+  const [userColors, setUserColors] = useState([]); // array of hex codes
 
-  // ------------------------
-  // Socket & Lifecycle Setup
-  // ------------------------
+  useEffect(() => {
+    const hexRaw  = params.get("targetHex");     // e.g. "%234B544E"
+    const nameRaw = params.get("targetName");    // e.g. "Nandor"
+  
+    if (hexRaw && nameRaw) {
+      const hex  = decodeURIComponent(hexRaw);   // → "#4B544E"
+      const name = decodeURIComponent(nameRaw);  // → "Nandor"
+      console.log("🎯 useEffect – got from URL:", { hex, name });
+      setTargetColor({ name, hex });
+    }
+  }, []);
+  
+  
+
   useEffect(() => {
     if (!name) {
       navigate('/');
+      return;
     }
 
     socket = io('http://localhost:5001');
 
-    // If we get these events, set data
-    socket.on('gameStarted', ({ targetColor, targetHex, timeRemaining }) => {
-      setTargetColor({ name: targetColor, hex: targetHex });
+    socket.on('gameStarted', ({ targetName, targetHex, timeRemaining }) => {
+      setTargetColor({ name: targetName, hex: targetHex });
       setTimeRemaining(timeRemaining);
     });
 
@@ -58,80 +72,57 @@ export default function GamePage() {
     };
   }, [code, name, navigate]);
 
-  // ------------------------
-  // Up/Down Arrow Functions
-  // ------------------------
   function handleArrowUp(index) {
-    // Add 1 instance of this color to userColors
     const colorHex = colorOptions[index].hex;
     setUserColors((prev) => [...prev, colorHex]);
   }
 
   function handleArrowDown(index) {
-    // Remove 1 instance of this color if present
     const colorHex = colorOptions[index].hex;
     setUserColors((prev) => {
       const newArray = [...prev];
-      const firstIndex = newArray.indexOf(colorHex);
-      if (firstIndex !== -1) {
-        newArray.splice(firstIndex, 1); // remove that color once
-      }
+      const i = newArray.indexOf(colorHex);
+      if (i !== -1) newArray.splice(i, 1);
       return newArray;
     });
   }
 
-  // ------------------------
-  // Blend the User's Colors
-  // ------------------------
   function getBlendedColor() {
-    if (userColors.length === 0) {
-      return "#FFFFFF"; // default if user has no colors
-    }
-    let rSum = 0, gSum = 0, bSum = 0;
+    if (userColors.length === 0) return "#FFFFFF";
+    let r = 0, g = 0, b = 0;
     userColors.forEach((hex) => {
-      const { r, g, b } = hexToRGB(hex);
-      rSum += r;
-      gSum += g;
-      bSum += b;
+      const { r: rr, g: gg, b: bb } = hexToRGB(hex);
+      r += rr; g += gg; b += bb;
     });
-    const count = userColors.length;
-    const r = Math.round(rSum / count);
-    const g = Math.round(gSum / count);
-    const b = Math.round(bSum / count);
+    r = Math.round(r / userColors.length);
+    g = Math.round(g / userColors.length);
+    b = Math.round(b / userColors.length);
     return rgbToHex(r, g, b);
   }
 
-  // Helper to convert HEX → {r,g,b}
   function hexToRGB(hex) {
-    let trimmed = hex.replace("#", "");
-    if (trimmed.length === 3) {
-      // convert #FFF to #FFFFFF
-      trimmed = trimmed.split("").map(x => x + x).join("");
-    }
-    const num = parseInt(trimmed, 16);
+    hex = hex.replace("#", "");
+    if (hex.length === 3) hex = hex.split("").map(x => x + x).join("");
+    const num = parseInt(hex, 16);
     return {
       r: (num >> 16) & 255,
       g: (num >> 8) & 255,
       b: num & 255,
     };
   }
-  // Helper to convert (r,g,b) → hex string
+
   function rgbToHex(r, g, b) {
     const toHex = (val) => val.toString(16).padStart(2, "0");
-    return "#" + toHex(r) + toHex(g) + toHex(b);
+    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
   }
 
   const userBlendedHex = getBlendedColor();
+  console.log("Rendering Target Color:", targetColor);
 
-  // ------------------------
-  // Render UI
-  // ------------------------
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col">
-      {/* Top Bar */}
       <div className="bg-white px-4 py-3 flex items-center justify-between shadow-md">
         <h1 className="text-2xl font-bold">hexblend</h1>
-        {/* Timer, top-right */}
         <div className="flex items-center space-x-2">
           <div className="text-gray-500">
             <span className="font-semibold">Time Remaining: </span>
@@ -144,12 +135,12 @@ export default function GamePage() {
         {/* Target Color Bar */}
         <div
           className="w-full max-w-3xl border-4 border-gray-300 rounded-md text-center p-6"
-          style={{ backgroundColor: targetColor.hex }}
+          style={{ backgroundColor: targetColor?.hex || "#FFFFFF" }}
         >
-          <h2 className="text-3xl font-bold">{targetColor.name}</h2>
+          <h2 className="text-3xl font-bold">{targetColor?.name || "Loading..."}</h2>
         </div>
 
-        {/* User Canvas Bar */}
+        {/* User Blend Bar */}
         <div
           className="w-full max-w-3xl border-4 border-gray-300 rounded-md text-center p-6"
           style={{ backgroundColor: userBlendedHex }}
@@ -159,7 +150,7 @@ export default function GamePage() {
           </h2>
         </div>
 
-        {/* Color Selection Row */}
+        {/* Color Picker */}
         <div className="flex flex-row items-center justify-center space-x-6 overflow-x-auto">
           {colorOptions.map((color, i) => (
             <div key={i} className="flex flex-col items-center">
@@ -173,7 +164,7 @@ export default function GamePage() {
                 className="hex-shape w-16 h-16"
                 style={{ backgroundColor: color.hex }}
                 title={color.name}
-              ></div>
+              />
               <button
                 onClick={() => handleArrowDown(i)}
                 className="text-xl bg-white p-1 mt-1 rounded hover:bg-gray-200"
